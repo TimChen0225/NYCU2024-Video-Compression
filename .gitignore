@@ -1,0 +1,6 @@
+*.png
+!lena.png
+
+*.docx
+*.zip
+*.pdf
