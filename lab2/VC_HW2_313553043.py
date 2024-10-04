@@ -31,8 +31,8 @@ def idct_2d(coefficient):
     reconsruted_image = np.zeros(coefficient.shape, dtype=np.float32)
     # create index matrix
     u, v = np.meshgrid(np.arange(M), np.arange(N), indexing="ij")
-    factor_u = np.where(u == 0, 1 / np.sqrt(2), 1)  # index=0時為根號二分之一，其他為1
-    factor_v = np.where(v == 0, 1 / np.sqrt(2), 1)  # index=0時為根號二分之一，其他為1
+    factor_u = np.where(u == 0, 1 / np.sqrt(2), 1)
+    factor_v = np.where(v == 0, 1 / np.sqrt(2), 1)
     for x in tqdm(range(M)):
         for y in range(N):
             cos_u = np.cos(((2 * x + 1) * u * np.pi) / (2 * M))
@@ -59,6 +59,7 @@ print("reading image")
 image = cv2.imread("lena.png", cv2.IMREAD_GRAYSCALE)
 image = image.astype(np.float32)
 
+# resize to speed up
 new_size = (256, 256)
 image = cv2.resize(image, new_size, interpolation=cv2.INTER_LINEAR)
 
@@ -79,6 +80,11 @@ print(f"1D DCT end, use:{time_1d:.4f} sec")
 
 # reconstruct using 2D IDCT
 print("2D IDCT start")
-reconstruct_image = idct_2d(dct_2d)
-print("caculate PSNR")
-mse = 
+reconstructed_image = idct_2d(dct_2d)
+mse = np.mean((image - reconstructed_image) ** 2)
+psnr = 10 * np.log10(255 * 2 / mse)
+
+print("------output------")
+print(f"2D DCT use:{time_2d:.4f} sec")
+print(f"1D DCT use:{time_1d:.4f} sec")
+print(f"PSNR of reconstructed_image = {psnr:.4f}")
