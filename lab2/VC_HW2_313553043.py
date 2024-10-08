@@ -55,7 +55,6 @@ def dct_1d(signal):
     return dct_cofficient
 
 
-print("reading image")
 image = cv2.imread("lena.png", cv2.IMREAD_GRAYSCALE)
 image = image.astype(np.float32)
 
@@ -88,3 +87,8 @@ print("------output------")
 print(f"2D DCT use:{time_2d:.4f} sec")
 print(f"1D DCT use:{time_1d:.4f} sec")
 print(f"PSNR of reconstructed_image = {psnr:.4f}")
+
+plt.imshow(np.log(np.abs(dct_2d) + 1), cmap="gray")
+plt.title("DCT Coefficients in Log Domain")
+plt.colorbar()
+plt.show()
