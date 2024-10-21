@@ -1,9 +1,14 @@
 import numpy as np
 import cv2
 import time
+import os
 from skimage.metrics import peak_signal_noise_ratio as psnr
 
 block_size = 8
+
+path = ".\\output"
+if not os.path.isdir(path):
+    os.mkdir(path)
 
 
 def full_search(reference_frame, current_frame, search_range):
@@ -117,10 +122,11 @@ def me_mc(reference_frame, current_frame, search_range, algorithm):
     runtime = end_time - start_time
 
     cv2.imwrite(
-        f"reconstructed_frame_{algorithm}_sr{search_range}.png", reconstructed_frame
+        f".\\output\\reconstructed_frame_{algorithm}_sr{search_range}.png",
+        reconstructed_frame,
     )
 
-    cv2.imwrite(f"residual_{algorithm}_sr{search_range}.png", residual)
+    cv2.imwrite(f".\\output\\residual_{algorithm}_sr{search_range}.png", residual)
 
     return psnr_value, runtime
 
