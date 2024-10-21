@@ -42,22 +42,21 @@ cv2.imshow("cb.png", cb)
 cv2.imshow("cr.png", cr)
 cv2.waitKey(0)
 
-"""
-while True:
-    key = input("store images?(Y/N): ").strip().upper()
-    if key == "Y":
-        cv2.imwrite("r.png", r)
-        cv2.imwrite("g.png", g)
-        cv2.imwrite("b.png", b)
-        cv2.imwrite("y.png", y)
-        cv2.imwrite("u.png", u)
-        cv2.imwrite("v.png", v)
-        cv2.imwrite("cb.png", cb)
-        cv2.imwrite("cr.png", cr)
-        print("image saved")
-        break
-    elif key == "N":
-        break
-    else:
-        print("Invalid input")
-"""
+
+# while True:
+#     key = input("store images?(Y/N): ").strip().upper()
+#     if key == "Y":
+#         cv2.imwrite("r.png", r)
+#         cv2.imwrite("g.png", g)
+#         cv2.imwrite("b.png", b)
+#         cv2.imwrite("y.png", y)
+#         cv2.imwrite("u.png", u)
+#         cv2.imwrite("v.png", v)
+#         cv2.imwrite("cb.png", cb)
+#         cv2.imwrite("cr.png", cr)
+#         print("image saved")
+#         break
+#     elif key == "N":
+#         break
+#     else:
+#         print("Invalid input")

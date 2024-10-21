@@ -1,5 +1,7 @@
 *.png
 !lena.png
+!one_gray.png
+!two_gray.png
 
 *.docx
 *.zip
