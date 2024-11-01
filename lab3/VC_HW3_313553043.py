@@ -6,9 +6,10 @@ from skimage.metrics import peak_signal_noise_ratio as psnr
 
 block_size = 8
 
-path = ".\\output"
-if not os.path.isdir(path):
-    os.mkdir(path)
+# 使用 os.path.join 生成跨平台的路徑
+output_path = os.path.join(".", "output")
+if not os.path.isdir(output_path):
+    os.mkdir(output_path)
 
 
 def full_search(reference_frame, current_frame, search_range):
@@ -17,7 +18,6 @@ def full_search(reference_frame, current_frame, search_range):
 
     for i in range(0, h, block_size):
         for j in range(0, w, block_size):
-            # print(f"full search:{i},{j}")
             best_match = None
             min_error = float("inf")
             current_block = current_frame[i : i + block_size, j : j + block_size]
@@ -48,7 +48,6 @@ def three_step_search(reference_frame, current_frame, search_range):
 
     for i in range(0, h, block_size):
         for j in range(0, w, block_size):
-            # print(f"three step:{i},{j}")
             best_move = (0, 0)
             min_error = float("inf")
             search_step = search_range // 2
@@ -58,7 +57,6 @@ def three_step_search(reference_frame, current_frame, search_range):
                 new_move = (0, 0)
                 for y in range(-search_step, search_step + 1, search_step):
                     for x in range(-search_step, search_step + 1, search_step):
-                        # print(f"three step step:{i},{j} -> {x},{y}")
                         ref_y = i + (best_move[0] + y) * block_size
                         ref_x = j + (best_move[1] + x) * block_size
 
@@ -86,7 +84,6 @@ def three_step_search(reference_frame, current_frame, search_range):
 
 def motion_compensation(reference_frame, motion_vectors):
     h, w = reference_frame.shape
-    block_size = 8
     compensated_frame = np.zeros_like(reference_frame)
 
     for i in range(0, h, block_size):
@@ -121,12 +118,17 @@ def me_mc(reference_frame, current_frame, search_range, algorithm):
 
     runtime = end_time - start_time
 
+    # 保存重建的圖片和殘差
     cv2.imwrite(
-        f".\\output\\reconstructed_frame_{algorithm}_sr{search_range}.png",
+        os.path.join(
+            output_path, f"reconstructed_frame_{algorithm}_sr{search_range}.png"
+        ),
         reconstructed_frame,
     )
-
-    cv2.imwrite(f".\\output\\residual_{algorithm}_sr{search_range}.png", residual)
+    cv2.imwrite(
+        os.path.join(output_path, f"residual_{algorithm}_sr{search_range}.png"),
+        residual,
+    )
 
     return psnr_value, runtime
 
