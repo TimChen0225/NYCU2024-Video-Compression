@@ -1,0 +1,197 @@
+import cv2
+import sys
+import numpy as np
+from scipy.fftpack import dct, idct
+from skimage.metrics import peak_signal_noise_ratio as psnr
+
+# ==========constant==========
+block_size = 8
+quantization_table1 = np.array(
+    [
+        [10, 7, 6, 10, 14, 24, 31, 37],
+        [7, 7, 8, 11, 16, 35, 36, 33],
+        [8, 8, 10, 14, 24, 34, 41, 34],
+        [8, 10, 13, 17, 31, 52, 48, 37],
+        [11, 13, 22, 34, 41, 65, 62, 46],
+        [14, 21, 33, 38, 49, 62, 68, 55],
+        [29, 38, 47, 52, 62, 73, 72, 61],
+        [43, 55, 57, 59, 67, 60, 62, 59],
+    ]
+)
+quantization_table2 = np.array(
+    [
+        [10, 11, 14, 28, 59, 59, 59, 59],
+        [11, 13, 16, 40, 59, 59, 59, 59],
+        [14, 16, 34, 59, 59, 59, 59, 59],
+        [28, 40, 59, 59, 59, 59, 59, 59],
+        [59, 59, 59, 59, 59, 59, 59, 59],
+        [59, 59, 59, 59, 59, 59, 59, 59],
+        [59, 59, 59, 59, 59, 59, 59, 59],
+        [59, 59, 59, 59, 59, 59, 59, 59],
+    ]
+)
+
+
+# ==========def==========
+def dct_2d(block):
+    return dct(dct(block.T, norm="ortho").T, norm="ortho")
+
+
+def idct_2d(block):
+    return idct(idct(block.T, norm="ortho").T, norm="ortho")
+
+
+def quantize(block, q_table):
+    return np.round(block / q_table).astype(int)
+
+
+def dequantize(block, q_table):
+    return (block * q_table).astype(float)
+
+
+def run_length_encode(data):
+    encode_data = []
+    prev = data[0]
+    count = 1
+    for i in range(1, len(data)):
+        if data[i] == prev:
+            count += 1
+        else:
+            encode_data.append((prev, count))
+            prev = data[i]
+            count = 1
+    encode_data.append((prev, count))
+    return encode_data
+
+
+def run_length_decode(data):
+    decode_data = []
+    for value, count in data:
+        decode_data.extend([value] * count)
+    return decode_data
+
+
+def generate_zigzag_order(n=8):
+    zigzag_order = []
+    for i in range(2 * n - 1):
+        if i % 2 == 0:
+            # from bottom to top
+            r = min(i, n - 1)
+            c = i - r
+            while r >= 0 and c < n:
+                zigzag_order.append((c, r))
+                r -= 1
+                c += 1
+        else:
+            # from top to bottom
+            c = min(i, n - 1)
+            r = i - c
+            while c >= 0 and r < n:
+                zigzag_order.append((c, r))
+                r += 1
+                c -= 1
+
+    return zigzag_order
+
+
+def get_size(obj):
+    if isinstance(obj, (list, tuple, set)):
+        return sys.getsizeof(obj) + sum(get_size(item) for item in obj)
+    elif isinstance(obj, np.ndarray):
+        return obj.nbytes
+    else:
+        return sys.getsizeof(obj)
+
+
+# ==========main==========
+if __name__ == "__main__":
+    image = cv2.imread("lena.png", cv2.IMREAD_GRAYSCALE)
+    h, w = image.shape
+    zigzag_order = generate_zigzag_order(block_size)
+
+    encode_blocks_1 = []
+    encode_blocks_2 = []
+    for i in range(0, h, block_size):
+        for j in range(0, w, block_size):
+            block = image[i : i + block_size, j : j + block_size]
+            dct_block = dct_2d(block)
+
+            # quantize using table 1
+            quantize_block1 = quantize(dct_block, quantization_table1)
+            zigzag_data1 = [quantize_block1[i][j] for i, j in zigzag_order]
+            encode_blocks_1.append(run_length_encode(zigzag_data1))
+
+            # qunatize using table 2
+            quantize_block2 = quantize(dct_block, quantization_table2)
+            zigzag_data2 = [quantize_block2[i][j] for i, j in zigzag_order]
+            encode_blocks_2.append(run_length_encode(zigzag_data2))
+
+    # restore image using table 1
+    decode_img_1 = np.zeros_like(image)
+    block_idx = 0
+    for i in range(0, h, block_size):
+        for j in range(0, w, block_size):
+            # decode run length data
+            decode_data = run_length_decode(encode_blocks_1[block_idx])
+
+            # restore dct block
+            dct_block = np.zeros((block_size, block_size))
+            for idx, (r, c) in enumerate(zigzag_order):
+                dct_block[r][c] = decode_data[idx]
+
+            # restore image
+            dequantize_block = dequantize(dct_block, quantization_table1)
+            idct_block = idct_2d(dequantize_block)
+            decode_img_1[i : i + block_size, j : j + block_size] = idct_block
+
+            block_idx += 1
+
+    # restore image using table 2
+    decode_img_2 = np.zeros_like(image)
+    block_idx = 0
+    for i in range(0, h, block_size):
+        for j in range(0, w, block_size):
+            # decode run length data
+            decode_data = run_length_decode(encode_blocks_2[block_idx])
+
+            # restore dct block
+            dct_block = np.zeros((block_size, block_size))
+            for idx, (r, c) in enumerate(zigzag_order):
+                dct_block[r][c] = decode_data[idx]
+
+            # restore image
+            dequantize_block = dequantize(dct_block, quantization_table2)
+            idct_block = idct_2d(dequantize_block)
+            decode_img_2[i : i + block_size, j : j + block_size] = idct_block
+
+            block_idx += 1
+
+    psnr_value_1 = psnr(image, decode_img_1)
+    psnr_value_2 = psnr(image, decode_img_2)
+
+    encode_size_1 = get_size(encode_blocks_1)
+    encode_size_2 = get_size(encode_blocks_2)
+    image_size = get_size(image.tolist())
+
+    element_num_1 = sum(len(block) for block in encode_blocks_1)
+    element_num_2 = sum(len(block) for block in encode_blocks_2)
+    element_num_img = w * h
+
+    cv2.imwrite("decode_image_1.png", decode_img_1)
+    cv2.imwrite("decode_image_2.png", decode_img_2)
+
+    # ===== print result =====
+    print("image size =", image_size)
+    print("image elements number =", element_num_img)
+    print("===== using table 1 =====")
+    print(f"psnr = {psnr_value_1:.3f}")
+    print(f"encode size = {encode_size_1}")
+    print(f"compression ratio = {image_size / encode_size_1:.3f}")
+    print(f"encode element number = {element_num_1}")
+    print(f"compression ratio (element) = {element_num_img / element_num_1:.3f}")
+    print("===== using table 2 =====")
+    print(f"psnr = {psnr_value_2:.3f}")
+    print(f"encode size = {encode_size_2}")
+    print(f"compression ratio = {image_size / encode_size_2:.3f}")
+    print(f"encode element number = {element_num_2}")
+    print(f"compression ratio (element) = {element_num_img / element_num_2:.3f}")

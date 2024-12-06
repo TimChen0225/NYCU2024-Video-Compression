@@ -3,7 +3,7 @@
 - Requiement
     ```
     numpy==1.26.4
-    openc==4.10.0
+    opencv==4.10.0
     scikit-image==0.24.0
     ```
 - Run
