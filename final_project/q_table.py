@@ -6,8 +6,14 @@ from torchvision.utils import save_image
 from PIL import Image
 import numpy as np
 from torch.utils.data import DataLoader, Dataset
+import lpips
 
-S = 1e-5
+S = 1e-3
+
+# 初始化 LPIPS 模型
+lpips_loss_fn = lpips.LPIPS(net="squeeze")  # 或 'vgg','alex'
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+lpips_loss_fn = lpips_loss_fn.to(device)
 
 # ===============================
 # Learnable JPEG Compression Model
@@ -15,9 +21,10 @@ S = 1e-5
 
 
 class LearnableJPEG(nn.Module):
-    def __init__(self, image_shape):
+    def __init__(self, image_shape, device):
         super(LearnableJPEG, self).__init__()
         self.image_shape = image_shape
+        self.device = device
 
         # Learnable quantization tables for luminance (Y) and chrominance (C)
         # Initial luminance quantization table
@@ -30,8 +37,16 @@ class LearnableJPEG(nn.Module):
         # Constants for DCT calculation
         self.dct_basis = self.create_dct_basis(8)
         self.dct_basis.requires_grad = False
+        self.dct_basis = self.dct_basis.to(self.device)
 
     def forward(self, x):
+        self.q_luminance.data = torch.clamp(
+            self.q_luminance.data, min=1.0 * S, max=255.0 * S
+        )
+        self.q_chrominance.data = torch.clamp(
+            self.q_chrominance.data, min=1.0 * S, max=255.0 * S
+        )
+
         # Shape check before processing
         if x.ndim != 4 or x.size(1) != 3:
             raise ValueError(
@@ -180,17 +195,21 @@ class LearnableJPEG(nn.Module):
 
 def distortion_loss(x, x_rec):
     mse = torch.mean((x - x_rec) ** 2)
-    lpips = 0  # Placeholder for LPIPS loss (can integrate perceptual loss libraries)
-    return mse + 0.01 * lpips
+    lpips = lpips_loss_fn(x_rec, x).mean()
+    return mse + 500 * lpips
 
 
 def rate_loss(q_luminance, q_chrominance):
-    return torch.sum(torch.abs(q_luminance)) + torch.sum(torch.abs(q_chrominance))
+    return torch.sum(1 / (torch.abs(q_luminance / S) + 1e-8)) + torch.sum(
+        1 / (torch.abs(q_chrominance / S) + 1e-8)
+    )
 
 
 def total_loss(x, x_rec, q_luminance, q_chrominance, lambda_rate):
     d_loss = distortion_loss(x, x_rec)
     r_loss = rate_loss(q_luminance, q_chrominance)
+    # print("d_loss:", d_loss)
+    # print("r_loss", r_loss)
     return d_loss + lambda_rate * r_loss
 
 
@@ -217,7 +236,7 @@ class ImageDataset(Dataset):
         self.image = load_image(image_path, image_size)
 
     def __len__(self):
-        return 1000  # 重複 1000 次
+        return 10  # 重複 1000 次
 
     def __getitem__(self, idx):
         return self.image.squeeze(0)  # 移除 batch 維度
@@ -247,6 +266,8 @@ def train(model, dataloader, optimizer, epochs, lambda_rate, device):
             optimizer.step()
 
             total_epoch_loss += loss.item()
+            if epoch == epochs - 1:
+                save_image(output_image / 255.0, "output_image.jpg")
 
         print(
             f"Epoch [{epoch+1}/{epochs}], Loss: {total_epoch_loss / len(dataloader):.4f}"
@@ -258,13 +279,14 @@ def train(model, dataloader, optimizer, epochs, lambda_rate, device):
 # ===============================
 
 if __name__ == "__main__":
+    print(f"using {'GPU' if torch.cuda.is_available() else 'cpu'}")
     # 設定設備與模型
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    model = LearnableJPEG(image_shape=(1, 3, 256, 256)).to(device)
+    model = LearnableJPEG(image_shape=(1, 3, 256, 256), device=device).to(device)
 
     # 訓練參數
     epochs = 10
-    lambda_rate = 1e-4
+    lambda_rate = 1
     learning_rate = 1e-6
 
     # 優化器
@@ -280,7 +302,10 @@ if __name__ == "__main__":
     # 儲存模型與量化表
     print("Training complete.")
     print("Learned Luminance Quantization Table:")
-    print(model.q_luminance.detach().cpu().numpy())
+    print(torch.clamp(model.q_luminance.detach().cpu() / S, min=1.0, max=255.0).numpy())
     print("Learned Chrominance Quantization Table:")
-    print(model.q_chrominance.detach().cpu().numpy())
+    print(
+        torch.clamp(model.q_chrominance.detach().cpu() / S, min=1.0, max=255.0).numpy()
+    )
+
     torch.save(model.state_dict(), "learnable_jpeg_model.pth")
