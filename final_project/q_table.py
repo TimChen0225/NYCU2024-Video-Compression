@@ -7,8 +7,9 @@ from PIL import Image
 import numpy as np
 from torch.utils.data import DataLoader, Dataset
 import lpips
+import os
 
-S = 1e-3
+S = 1e-5
 
 # 初始化 LPIPS 模型
 lpips_loss_fn = lpips.LPIPS(net="squeeze")  # 或 'vgg','alex'
@@ -29,10 +30,10 @@ class LearnableJPEG(nn.Module):
         # Learnable quantization tables for luminance (Y) and chrominance (C)
         # Initial luminance quantization table
         self.q_luminance = nn.Parameter(torch.empty(8, 8))
-        torch.nn.init.uniform_(self.q_luminance, a=1 * S, b=2 * S)
+        torch.nn.init.uniform_(self.q_luminance, a=10 * S, b=100 * S)
         # Initial chrominance quantization table
         self.q_chrominance = nn.Parameter(torch.empty(8, 8))
-        torch.nn.init.uniform_(self.q_chrominance, a=1 * S, b=2 * S)
+        torch.nn.init.uniform_(self.q_chrominance, a=10 * S, b=100 * S)
 
         # Constants for DCT calculation
         self.dct_basis = self.create_dct_basis(8)
@@ -231,15 +232,22 @@ def load_image(image_path, image_size):
     return image_tensor
 
 
-class ImageDataset(Dataset):
-    def __init__(self, image_path, image_size):
-        self.image = load_image(image_path, image_size)
+class FolderDataset(Dataset):
+    def __init__(self, folder_path, image_size):
+        self.image_paths = [
+            os.path.join(folder_path, fname)
+            for fname in os.listdir(folder_path)
+            if fname.endswith((".png", ".jpg", ".jpeg"))
+        ]
+        self.image_size = image_size
 
     def __len__(self):
-        return 10  # 重複 1000 次
+        return len(self.image_paths)
 
     def __getitem__(self, idx):
-        return self.image.squeeze(0)  # 移除 batch 維度
+        image_path = self.image_paths[idx]
+        image = load_image(image_path, self.image_size)
+        return image.squeeze(0)  # 移除 batch 維度
 
 
 # ===============================
@@ -285,15 +293,15 @@ if __name__ == "__main__":
     model = LearnableJPEG(image_shape=(1, 3, 256, 256), device=device).to(device)
 
     # 訓練參數
-    epochs = 10
-    lambda_rate = 1
-    learning_rate = 1e-6
+    epochs = 20
+    lambda_rate = 10
+    learning_rate = 1e-5
 
     # 優化器
     optimizer = optim.Adam(model.parameters(), lr=learning_rate)
 
     # 建立 DataLoader
-    dataset = ImageDataset(image_path="lena.png", image_size=256)
+    dataset = FolderDataset(folder_path="./train_data", image_size=256)
     dataloader = DataLoader(dataset, batch_size=1, shuffle=True)
 
     # 開始訓練
